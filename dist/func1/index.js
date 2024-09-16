@@ -1,26 +1,47 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const httpTrigger = function (context, req) {
-    return __awaiter(this, void 0, void 0, function* () {
+const OpenAI = require('openai');
+const { createConnection } = require('mysql2/promise');
+
+const client = new OpenAI({
+    apiKey: process.env.OPENAI,
+});
+
+const httpTrigger = async function (context) {
+    const connectionConfig = {
+        host: process.env.MYSQL_HOST,
+        user: process.env.MYSQL_USER,
+        password: process.env.MYSQL_PASSWORD,
+        database: process.env.MYSQL_DATABASE
+    };
+
+    let connection;
+    try {
+        connection = await createConnection(connectionConfig);
         context.log('HTTP trigger function processed a request.');
-        const name = (req.query.name || (req.body && req.body.name));
-        const responseMessage = name
-            ? "Hello, " + name + ". This HTTP triggered function executed successfully."
-            : "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response.";
+
+        // Prompt fijo para OpenAI (sin usar request)
+        const prompt = "Escribe una historia corta sobre un viaje espacial";
+
+        const response = await client.completions.create({
+            model: 'text-davinci-003',
+            prompt: prompt,
+            max_tokens: 150,
+        });
+
+        const generatedText = response.choices[0].text;
+
         context.res = {
-            // status: 200, /* Defaults to 200 */
-            body: responseMessage
+            status: 200,
+            body: `OpenAI: ${generatedText}`
         };
-    });
+    } catch (error) {
+        context.res = {
+            status: 500,
+            body: "Error en la ejecución: " + error.message
+        };
+    } finally {
+        if (connection) await connection.end();
+    }
 };
-exports.default = httpTrigger;
-//# sourceMappingURL=index.js.map
+
+module.exports = httpTrigger;

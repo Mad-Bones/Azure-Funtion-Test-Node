@@ -3,10 +3,11 @@ import OpenAI from 'openai';
 import { createConnection } from 'mysql2/promise';   
 
 const client = new OpenAI({
-    apiKey: process.env.OPENAI, 
+    apiKey: process.env.OPENAI_API_KEY, 
   });  
 
-  const httpTrigger: AzureFunction = async function (context: Context): Promise<void> {
+  const httpTrigger: AzureFunction = async function (context: Context, req: HttpRequest): Promise<void> {
+    const question = req.query.question || (req.body && req.body.question);
     const connectionConfig = {
         host: process.env.MYSQL_HOST,
         user: process.env.MYSQL_USER,
@@ -14,6 +15,13 @@ const client = new OpenAI({
         database: process.env.MYSQL_DATABASE
     };
 
+    if (!question) {
+        context.res = {
+            status: 400,
+            body: "Por favor, proporciona una pregunta."
+        };
+        return;
+    }
     let connection;
     try {
         
@@ -21,25 +29,20 @@ const client = new OpenAI({
         context.log('HTTP trigger function processed a request.');
 
         // TEXTO DE PRUEBA
-        const prompt = "Escribe una historia corta sobre un viaje espacial";
-
         const response = await client.completions.create({
             model: 'text-davinci-003',
-            prompt: prompt,
+            prompt: question,
             max_tokens: 150,
         });
-
-        // Procesar y mostrar la respuesta de OpenAI
-        const generatedText = response.choices[0].text;
-
+        const generatedAnswer = response.choices[0].text.trim();
         context.res = {
             status: 200,
-            body: `OpenAI: ${generatedText}`
+            body: { question, answer: generatedAnswer }
         };
     } catch (error) {
         context.res = {
             status: 500,
-            body: "Error en la ejecución: " + error.message
+            body: "Error en la llamada a OpenAI: " + error.message
         };
     } finally {
         if (connection) await connection.end();
